@@ -40,7 +40,7 @@ yes_no() {
 }
 
 cat <<'INTRO'
-MediaGuard Docker setup
+MediaGarrd Docker setup
 
 This script creates:
 1. docker-compose.yml
@@ -68,7 +68,7 @@ fi
 rm -f "$COMPOSE_FILE" "$ENV_FILE" "$SERVER_ENV_FILE" "$CLIENT_ENV_FILE"
 
 if [[ "$setup_server" == "true" ]]; then # BEGIN SERVER SETUP
-    prompt server_port "MediaGuard-Server host port [38471]: " "38471"
+    prompt server_port "MediaGarrd-Server host port [38471]: " "38471"
     prompt backup_interval "Server automatic backup interval in ISO-8601 format [PT12H]: " "PT12H"
     prompt backup_root_host "Server backup host path [./data/server/backups]: " "./data/server/backups"
     prompt backup_retention "Maximum number of backups to keep [10]: " "10"
@@ -120,9 +120,9 @@ if [[ "$setup_server" == "true" ]]; then # BEGIN SERVER SETUP
     {
         cat <<EOF_ENV
 SERVER_PORT=$server_port
-MEDIAGUARD_BACKUP_INTERVAL=$backup_interval
+MEDIAGARRD_BACKUP_INTERVAL=$backup_interval
 BACKUP_ROOT_HOST_PATH=$backup_root_host
-MEDIAGUARD_RETENTION_COUNT=$backup_retention
+MEDIAGARRD_RETENTION_COUNT=$backup_retention
 EOF_ENV
         if [[ "$jellyfin_enabled" == "true" ]]; then
             echo "JELLYFIN_PATH=$jellyfin_path"
@@ -147,9 +147,9 @@ EOF_ENV
 
     cat > "$SERVER_ENV_FILE" <<EOF_SERVER
 SERVER_PORT=$server_port
-MEDIAGUARD_BACKUP_INTERVAL=$backup_interval
-MEDIAGUARD_BACKUP_ROOT=/var/lib/mediaguard/backups
-MEDIAGUARD_RETENTION_COUNT=$backup_retention
+MEDIAGARRD_BACKUP_INTERVAL=$backup_interval
+MEDIAGARRD_BACKUP_ROOT=/var/lib/mediagarrd/backups
+MEDIAGARRD_RETENTION_COUNT=$backup_retention
 JELLYFIN_ENABLED=$jellyfin_enabled
 RADARR_ENABLED=$radarr_enabled
 SONARR_ENABLED=$sonarr_enabled
@@ -163,17 +163,17 @@ EOF_SERVER
     {
         cat <<EOF_COMPOSE
 services:
-  mediaguard-server:
+  mediagarrd-server:
     build:
-      context: ./MediaGuard-Server
+      context: ./MediaGarrd-Server
       dockerfile: Dockerfile
-    container_name: mediaguard-server
+    container_name: mediagarrd-server
     env_file:
       - ./secrets/server.env
     ports:
       - "$server_port:$server_port"
     volumes:
-      - "$backup_root_host:/var/lib/mediaguard/backups"
+      - "$backup_root_host:/var/lib/mediagarrd/backups"
 EOF_COMPOSE
         if [[ "$jellyfin_enabled" == "true" ]]; then
             echo "      - \"$jellyfin_path:/srv/sources/jellyfin:ro\""
@@ -207,46 +207,46 @@ EOF_COMPOSE
     echo "2. Review secrets/server.env"
     echo "3. Start services with: docker compose up --build -d"
 else # BEGIN CLIENT SETUP
-    prompt client_port "MediaGuard-Client host port [8081]: " "8081"
+    prompt client_port "MediaGarrd-Client host port [8081]: " "8081"
     prompt pickup_interval "Client automatic pickup interval in ISO-8601 format [PT12H]: " "PT12H"
-    prompt server_ip "MediaGuard-Server IP [192.168.1.10]: " "192.168.1.10"
+    prompt server_ip "MediaGarrd-Server IP [192.168.1.10]: " "192.168.1.10"
     prompt client_downloads_host "Client download host path [./data/client/downloads]: " "./data/client/downloads"
     prompt client_state_host "Client state host path [./data/client]: " "./data/client"
 
     cat > "$ENV_FILE" <<EOF_ENV
 CLIENT_PORT=$client_port
 CLIENT_PICKUP_INTERVAL=$pickup_interval
-MEDIAGUARD_SERVER_PORT=38471
-MEDIAGUARD_SERVER_IP=$server_ip
+MEDIAGARRD_SERVER_PORT=38471
+MEDIAGARRD_SERVER_IP=$server_ip
 CLIENT_DOWNLOADS_HOST_PATH=$client_downloads_host
 CLIENT_STATE_HOST_PATH=$client_state_host
 EOF_ENV
 
     cat > "$CLIENT_ENV_FILE" <<EOF_CLIENT
-MEDIAGUARD_SERVER_PORT=38471
-MEDIAGUARD_SERVER_IP=$server_ip
+MEDIAGARRD_SERVER_PORT=38471
+MEDIAGARRD_SERVER_IP=$server_ip
 CLIENT_PORT=$client_port
 CLIENT_PICKUP_INTERVAL=$pickup_interval
-CLIENT_DOWNLOAD_DIRECTORY=/var/lib/mediaguard/downloads
-CLIENT_STATE_FILE=/var/lib/mediaguard/client/state.json
+CLIENT_DOWNLOAD_DIRECTORY=/var/lib/mediagarrd/downloads
+CLIENT_STATE_FILE=/var/lib/mediagarrd/client/state.json
 EOF_CLIENT
 
     rm -f "$SERVER_ENV_FILE"
 
     cat > "$COMPOSE_FILE" <<EOF_COMPOSE
 services:
-  mediaguard-client:
+  mediagarrd-client:
     build:
       context: .
-      dockerfile: MediaGuard-Client/Dockerfile
-    container_name: mediaguard-client
+      dockerfile: MediaGarrd-Client/Dockerfile
+    container_name: mediagarrd-client
     env_file:
       - ./secrets/client.env
     ports:
       - "$client_port:$client_port"
     volumes:
-      - "$client_downloads_host:/var/lib/mediaguard/downloads"
-      - "$client_state_host:/var/lib/mediaguard/client"
+      - "$client_downloads_host:/var/lib/mediagarrd/downloads"
+      - "$client_state_host:/var/lib/mediagarrd/client"
     restart: unless-stopped
 EOF_COMPOSE
 
@@ -259,6 +259,6 @@ EOF_COMPOSE
     echo "1. Review .env"
     echo "2. Review secrets/client.env"
     echo "3. Start services with: docker compose up --build -d"
-    echo "4. Open MediaGuard Client at: http://localhost:$client_port"
+    echo "4. Open MediaGarrd Client at: http://localhost:$client_port"
 fi
 
