@@ -7,12 +7,14 @@ import java.util.List;
 
 import wellatleastitried.mediagarrd.services.config.*;
 
+import static wellatleastitried.mediagarrd.Constants.*;
+
 public class QBittorrentRunner extends AbstractLocalCopyRunner {
 
     private final QBittorrentServiceConfig config;
 
     public QBittorrentRunner(QBittorrentServiceConfig config) {
-        super("QBittorrent");
+        super(SUPPORTED_SERVICES.get(Services.QBITTORRENT));
         this.config = config;
     }
 

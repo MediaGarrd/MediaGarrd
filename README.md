@@ -2,7 +2,7 @@
 
 MediaGarrd creates scheduled backups for commonly self-hosted services and provides a simple client UI to manage backups.
 
-See all supported services [here](./SUPPORTED_SERVICES)
+See all supported services [here](./ref/SUPPORTED_SERVICES)
 
 ## Install
 

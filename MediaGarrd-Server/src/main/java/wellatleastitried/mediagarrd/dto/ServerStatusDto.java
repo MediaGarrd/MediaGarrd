@@ -7,5 +7,4 @@ public record ServerStatusDto(
     boolean running,
     int backupRetentionCount,
     Duration backupInterval
-) {
-}
+) {}

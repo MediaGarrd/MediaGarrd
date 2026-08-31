@@ -4,12 +4,14 @@ import java.util.List;
 
 import wellatleastitried.mediagarrd.services.config.*;
 
+import static wellatleastitried.mediagarrd.Constants.*;
+
 public class SonarrRunner extends AbstractLocalCopyRunner {
 
     private final AbstractServiceConfig config;
 
     public SonarrRunner(AbstractServiceConfig config) {
-        super("Sonarr");
+        super(SUPPORTED_SERVICES.get(Services.SONARR));
         this.config = config;
     }
 

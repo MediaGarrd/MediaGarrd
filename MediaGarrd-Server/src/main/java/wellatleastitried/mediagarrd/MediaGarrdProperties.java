@@ -5,6 +5,7 @@ import java.util.EnumMap;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import static wellatleastitried.mediagarrd.Constants.*;
 import wellatleastitried.mediagarrd.services.config.AbstractServiceConfig;
 
 @ConfigurationProperties(prefix = "mediagarrd")
@@ -13,7 +14,7 @@ public class MediaGarrdProperties {
     private Duration backupInterval = Duration.ofHours(12);
     private String backupRoot = "./data/server/backups";
     private int retentionCount = 10;
-    private EnumMap<Constants.Services, AbstractServiceConfig> services = new EnumMap<>(Constants.Services.class);
+    private EnumMap<Services, AbstractServiceConfig> services = new EnumMap<>(Services.class);
 
     public Duration getBackupInterval() {
         return backupInterval;
@@ -39,11 +40,11 @@ public class MediaGarrdProperties {
         this.retentionCount = retentionCount;
     }
 
-    public EnumMap<Constants.Services, AbstractServiceConfig> getServices() {
+    public EnumMap<Services, AbstractServiceConfig> getServices() {
         return services;
     }
 
-    public void setServices(EnumMap<Constants.Services, AbstractServiceConfig> services) {
+    public void setServices(EnumMap<Services, AbstractServiceConfig> services) {
         this.services = services;
     }
 }

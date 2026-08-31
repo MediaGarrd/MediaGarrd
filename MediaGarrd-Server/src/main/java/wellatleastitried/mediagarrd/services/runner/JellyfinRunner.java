@@ -1,15 +1,17 @@
 package wellatleastitried.mediagarrd.services.runner;
 
+import java.util.List;
+
 import wellatleastitried.mediagarrd.services.config.*;
 
-import java.util.List;
+import static wellatleastitried.mediagarrd.Constants.*;
 
 public class JellyfinRunner extends AbstractLocalCopyRunner {
 
     private final AbstractServiceConfig config;
 
     public JellyfinRunner(AbstractServiceConfig config) {
-        super("Jellyfin");
+        super(SUPPORTED_SERVICES.get(Services.JELLYFIN));
         this.config = config;
     }
 

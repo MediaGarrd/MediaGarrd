@@ -131,6 +131,5 @@ public abstract class AbstractLocalCopyRunner implements Runner {
         Files.walkFileTree(source, visitor);
     }
 
-    protected record CopySpec(String sourcePath, String targetName, boolean directory) {
-    }
+    protected record CopySpec(String sourcePath, String targetName, boolean directory) {}
 }

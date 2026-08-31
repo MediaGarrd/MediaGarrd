@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import wellatleastitried.mediagarrd.Constants;
+import static wellatleastitried.mediagarrd.Constants.*;
 import wellatleastitried.mediagarrd.services.config.*;
 import wellatleastitried.mediagarrd.services.runner.*;
 
@@ -17,10 +17,10 @@ public class RunnerFactory {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RunnerFactory.class);
 
-    public List<Runner> build(EnumMap<Constants.Services, AbstractServiceConfig> serviceConfigMap) {
+    public List<Runner> build(EnumMap<Services, AbstractServiceConfig> serviceConfigMap) {
         List<Runner> runners = new ArrayList<>();
 
-        for (EnumMap.Entry<Constants.Services, AbstractServiceConfig> entry : serviceConfigMap.entrySet()) {
+        for (EnumMap.Entry<Services, AbstractServiceConfig> entry : serviceConfigMap.entrySet()) {
             AbstractServiceConfig config = entry.getValue();
             if (config == null || !config.isEnabled()) {
                 LOGGER.debug("Service '{}' is disabled or unconfigured, skipping", entry.getKey());
@@ -29,14 +29,14 @@ public class RunnerFactory {
 
             validate(entry.getKey(), config);
 
-            Constants.Services key = entry.getKey();
+            Services key = entry.getKey();
 
             //@ADD_NEW_SERVICE
             @SuppressWarnings("unused")
             Object exhaustive = switch (key) {
                 case JELLYFIN -> {
                     runners.add(new JellyfinRunner(config));
-                    LOGGER.info("Registered runner: jellyfin");
+                    LOGGER.info("Registered runner: " + SUPPORTED_SERVICES.get(Services.JELLYFIN));
                     yield null;
                 }
                 case RADARR -> {
@@ -64,7 +64,6 @@ public class RunnerFactory {
                     LOGGER.info("Registered runner: qbittorrent");
                     yield null;
                 }
-                // default -> LOGGER.warn("Unknown service key '{}', no runner registered", Constants.SUPPORTED_SERVICES.get(key));
             };
         }
 
@@ -72,11 +71,11 @@ public class RunnerFactory {
         return runners;
     }
 
-    private void validate(Constants.Services key, AbstractServiceConfig config) {
-        boolean supported = Constants.SUPPORTED_SERVICES.entrySet()
+    private void validate(Services key, AbstractServiceConfig config) {
+        boolean supported = SUPPORTED_SERVICES.entrySet()
             .stream()
-            .anyMatch(value -> value.getValue().equalsIgnoreCase(Constants.SUPPORTED_SERVICES.get(key)));
-        String serviceName = Constants.SUPPORTED_SERVICES.get(key);
+            .anyMatch(value -> value.getValue().equalsIgnoreCase(SUPPORTED_SERVICES.get(key)));
+        String serviceName = SUPPORTED_SERVICES.get(key);
         if (!supported) {
             throw new IllegalArgumentException("Unsupported service configured: " + serviceName);
         }
