@@ -10,6 +10,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,6 +98,7 @@ public abstract class AbstractLocalCopyRunner implements Runner {
         }
     }
 
+
     private void copyDirectory(Path source, Path target) throws IOException {
         Files.createDirectories(target);
         FileVisitor<Path> visitor = new SimpleFileVisitor<>() {
@@ -109,6 +111,30 @@ public abstract class AbstractLocalCopyRunner implements Runner {
                 return FileVisitResult.CONTINUE;
             }
 
+            private Set<String> databaseExtensions = Set.of(
+                ".db",
+                ".database",
+                ".mdb",
+                ".accdb",
+                ".sqlite",
+                ".sql"
+            );
+
+            private FileVisitResult handleDatabaseFile(Path source, Path destination) throws IOException {
+                // TODO: Handle database files correctly so they are not corrupted
+                Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                LOGGER.debug("[{}] Copied DB: {}", serviceName, destination);
+                return FileVisitResult.CONTINUE;
+            }
+
+            private String getExt(String filename) {
+                int dotIndex = filename.lastIndexOf('.');
+                if (dotIndex < 0 || dotIndex == filename.length() - 1) {
+                    return "";
+                }
+                return filename.substring(dotIndex).toLowerCase(Locale.ROOT);
+            }
+
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                 Path relative = source.relativize(file);
@@ -116,6 +142,11 @@ public abstract class AbstractLocalCopyRunner implements Runner {
                 Path parent = destination.getParent();
                 if (parent != null) {
                     Files.createDirectories(parent);
+                }
+
+                String filename = file.getFileName().toString().toLowerCase(Locale.ROOT);
+                if (databaseExtensions.contains(getExt(filename))) {
+                        return handleDatabaseFile(file, destination);
                 }
                 Files.copy(file, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
                 LOGGER.debug("[{}] Copied: {}", serviceName, destination);
