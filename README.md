@@ -1,14 +1,8 @@
-# MediaGuard
+# MediaGarrd
 
-MediaGuard creates scheduled backups for common media stack apps and provides a simple client UI to manage backups.
+MediaGarrd creates scheduled backups for commonly self-hosted services and provides a simple client UI to manage backups.
 
-Supported Apps:
-- Jellyfin
-- Radarr
-- Sonarr
-- Prowlarr
-- Tdarr
-- qBittorrent
+See all supported services [here](./ref/SUPPORTED_SERVICES)
 
 ## Install
 

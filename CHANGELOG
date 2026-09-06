@@ -1,0 +1,6 @@
+# CHANGELOG
+
+## 9-6-26
+- Abstracting services to make adding new ones easier
+- Adding new tests
+- Project renaming

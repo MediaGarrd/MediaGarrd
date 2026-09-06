@@ -1,3 +1,4 @@
+# Dev artifacts
 .gradle
 .settings/
 build
@@ -9,11 +10,13 @@ gradle/
 **/bin/
 .kotlin
 .note.xnote
-secrets/
-.env
 .env.*
 .env.example
 .env.test.example
+docker-compose.example.yml
+
+# Prod artifacts
+secrets/
+.env
 data/
 docker-compose.yml
-docker-compose.example.yml

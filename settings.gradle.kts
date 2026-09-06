@@ -10,6 +10,6 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
-rootProject.name = "MediaGuard"
-include("MediaGuard-Server")
-include("MediaGuard-Client")
+rootProject.name = "MediaGarrd"
+include("MediaGarrd-Server")
+include("MediaGarrd-Client")
