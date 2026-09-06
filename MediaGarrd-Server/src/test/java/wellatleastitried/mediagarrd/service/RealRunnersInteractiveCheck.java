@@ -4,12 +4,14 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
-import wellatleastitried.mediagarrd.services.config.ServiceConfig;
+import wellatleastitried.mediagarrd.Constants.Services;
+import wellatleastitried.mediagarrd.services.config.AbstractServiceConfig;
+import wellatleastitried.mediagarrd.services.config.CommonServiceConfig;
+import wellatleastitried.mediagarrd.services.config.QBittorrentServiceConfig;
 import wellatleastitried.mediagarrd.services.runner.Runner;
 
 public final class RealRunnersInteractiveCheck {
@@ -24,13 +26,13 @@ public final class RealRunnersInteractiveCheck {
         System.out.println("This check prompts for local directory/file paths on the server host.");
         System.out.println("Any service you skip will not be run.");
 
-        Map<String, ServiceConfig> configs = new LinkedHashMap<>();
-        configs.put("jellyfin", promptJellyfin(reader));
-        configs.put("radarr", promptPathService(reader, "Radarr"));
-        configs.put("sonarr", promptPathService(reader, "Sonarr"));
-        configs.put("prowlarr", promptProwlarr(reader));
-        configs.put("tdarr", promptTdarr(reader));
-        configs.put("qbittorrent", promptQbittorrent(reader));
+        EnumMap<Services, AbstractServiceConfig> configs = new EnumMap<>(Services.class);
+        configs.put(Services.JELLYFIN, promptJellyfin(reader));
+        configs.put(Services.RADARR, promptPathService(reader, "Radarr"));
+        configs.put(Services.SONARR, promptPathService(reader, "Sonarr"));
+        configs.put(Services.PROWLARR, promptPathService(reader, "Prowlarr"));
+        configs.put(Services.TDARR, promptPathService(reader, "Tdarr"));
+        configs.put(Services.QBITTORRENT, promptQbittorrent(reader));
 
         RunnerFactory factory = new RunnerFactory();
         List<Runner> runners = factory.build(configs);
@@ -59,8 +61,8 @@ public final class RealRunnersInteractiveCheck {
         System.out.println("Total files discovered: " + fileCount);
     }
 
-    private static ServiceConfig promptJellyfin(BufferedReader reader) throws Exception {
-        ServiceConfig config = new ServiceConfig();
+    private static AbstractServiceConfig promptJellyfin(BufferedReader reader) throws Exception {
+        CommonServiceConfig config = new CommonServiceConfig();
         boolean enabled = askYesNo(reader, "Enable Jellyfin runner? [y/N]: ", false);
         config.setEnabled(enabled);
         if (!enabled) {
@@ -71,8 +73,8 @@ public final class RealRunnersInteractiveCheck {
         return config;
     }
 
-    private static ServiceConfig promptPathService(BufferedReader reader, String label) throws Exception {
-        ServiceConfig config = new ServiceConfig();
+    private static AbstractServiceConfig promptPathService(BufferedReader reader, String label) throws Exception {
+        CommonServiceConfig config = new CommonServiceConfig();
         boolean enabled = askYesNo(reader, "Enable " + label + " runner? [y/N]: ", false);
         config.setEnabled(enabled);
         if (!enabled) {
@@ -84,32 +86,8 @@ public final class RealRunnersInteractiveCheck {
         return config;
     }
 
-    private static ServiceConfig promptProwlarr(BufferedReader reader) throws Exception {
-        ServiceConfig config = new ServiceConfig();
-        boolean enabled = askYesNo(reader, "Enable Prowlarr runner? [y/N]: ", false);
-        config.setEnabled(enabled);
-        if (!enabled) {
-            return config;
-        }
-
-        config.setPath(ask(reader, "Prowlarr base directory", "/mnt/appdata/prowlarr"));
-        return config;
-    }
-
-    private static ServiceConfig promptTdarr(BufferedReader reader) throws Exception {
-        ServiceConfig config = new ServiceConfig();
-        boolean enabled = askYesNo(reader, "Enable Tdarr runner? [y/N]: ", false);
-        config.setEnabled(enabled);
-        if (!enabled) {
-            return config;
-        }
-
-        config.setPath(ask(reader, "Tdarr base directory", "/mnt/appdata/tdarr"));
-        return config;
-    }
-
-    private static ServiceConfig promptQbittorrent(BufferedReader reader) throws Exception {
-        ServiceConfig config = new ServiceConfig();
+    private static AbstractServiceConfig promptQbittorrent(BufferedReader reader) throws Exception {
+        QBittorrentServiceConfig config = new QBittorrentServiceConfig();
         boolean enabled = askYesNo(reader, "Enable qBittorrent runner? [y/N]: ", false);
         config.setEnabled(enabled);
         if (!enabled) {

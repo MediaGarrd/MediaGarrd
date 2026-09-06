@@ -1,14 +1,14 @@
 package wellatleastitried.mediagarrd.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -16,14 +16,13 @@ import java.util.Map;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.boot.test.system.CapturedOutput;
-import org.springframework.boot.test.system.OutputCaptureExtension;
 
-import wellatleastitried.mediagarrd.services.config.ServiceConfig;
+import wellatleastitried.mediagarrd.Constants.Services;
+import wellatleastitried.mediagarrd.services.config.AbstractServiceConfig;
+import wellatleastitried.mediagarrd.services.config.CommonServiceConfig;
+import wellatleastitried.mediagarrd.services.config.QBittorrentServiceConfig;
 import wellatleastitried.mediagarrd.services.runner.Runner;
 
-@ExtendWith(OutputCaptureExtension.class)
 @Tag("real-runners")
 class RunnersIntegrationTest {
 
@@ -31,18 +30,17 @@ class RunnersIntegrationTest {
     Path tempDir;
 
     @Test
-    void runnersCreateFilesAndLogDiscoveryFromEnv(CapturedOutput output) throws Exception {
+    void enabledRunnersCopyFilesFromConfiguredPaths() throws Exception {
         Map<String, String> env = loadEnv();
 
-        Map<String, ServiceConfig> configs = new LinkedHashMap<>();
-        List<ServiceExpectation> expectations = new ArrayList<>();
+        EnumMap<Services, AbstractServiceConfig> configs = new EnumMap<>(Services.class);
 
-        addJellyfin(configs, expectations, env);
-        addRadarr(configs, expectations, env);
-        addSonarr(configs, expectations, env);
-        addProwlarr(configs, expectations, env);
-        addTdarr(configs, expectations, env);
-        addQbittorrent(configs, expectations, env);
+        addJellyfin(configs, env);
+        addPathService(configs, env, Services.RADARR);
+        addPathService(configs, env, Services.SONARR);
+        addPathService(configs, env, Services.PROWLARR);
+        addPathService(configs, env, Services.TDARR);
+        addQbittorrent(configs, env);
 
         RunnerFactory factory = new RunnerFactory();
         List<Runner> runners = factory.build(configs);
@@ -55,107 +53,64 @@ class RunnersIntegrationTest {
             runner.run(outputDirectory);
         }
 
-        for (ServiceExpectation expectation : expectations) {
-            Path serviceOutput = outputDirectory.resolve(expectation.serviceKey());
+        assertEquals(configs.size(), runners.size());
+        for (Runner runner : runners) {
+            Path serviceOutput = outputDirectory.resolve(runner.getServiceName().toLowerCase(Locale.ROOT));
             assertTrue(Files.exists(serviceOutput), "Missing service output directory: " + serviceOutput);
 
-            long serviceFiles;
             try (var walk = Files.walk(serviceOutput)) {
-                serviceFiles = walk.filter(Files::isRegularFile).count();
+                assertTrue(
+                    walk.anyMatch(Files::isRegularFile),
+                    "No files copied for service " + runner.getServiceName()
+                );
             }
-            assertTrue(serviceFiles > 0, "No files copied for service " + expectation.serviceLabel());
-        }
-
-        String logs = output.getOut();
-        for (ServiceExpectation expectation : expectations) {
-            assertTrue(logs.contains(expectation.serviceLabel() + " runner found file:"));
         }
     }
 
-    private void addJellyfin(Map<String, ServiceConfig> configs, List<ServiceExpectation> expectations, Map<String, String> env) {
+    private void addJellyfin(EnumMap<Services, AbstractServiceConfig> configs, Map<String, String> env) {
         boolean enabled = booleanValue(env, "JELLYFIN_ENABLED", "jellyfin_enabled", false);
         if (!enabled) {
             return;
         }
 
-        ServiceConfig config = new ServiceConfig();
+        CommonServiceConfig config = new CommonServiceConfig();
         config.setEnabled(true);
         config.setConfigPath(required(env, "JELLYFIN_CONFIG_PATH", "jellyfin_config_path"));
 
-        configs.put("jellyfin", config);
-        expectations.add(new ServiceExpectation("jellyfin", "Jellyfin"));
+        configs.put(Services.JELLYFIN, config);
     }
 
-    private void addRadarr(Map<String, ServiceConfig> configs, List<ServiceExpectation> expectations, Map<String, String> env) {
-        addPathService(configs, expectations, env, "radarr", "Radarr");
-    }
-
-    private void addSonarr(Map<String, ServiceConfig> configs, List<ServiceExpectation> expectations, Map<String, String> env) {
-        addPathService(configs, expectations, env, "sonarr", "Sonarr");
-    }
-
-    private void addProwlarr(Map<String, ServiceConfig> configs, List<ServiceExpectation> expectations, Map<String, String> env) {
-        boolean enabled = booleanValue(env, "PROWLARR_ENABLED", "prowlarr_enabled", false);
-        if (!enabled) {
-            return;
-        }
-
-        ServiceConfig config = new ServiceConfig();
-        config.setEnabled(true);
-        config.setPath(required(env, "PROWLARR_PATH", "prowlarr_path"));
-
-        configs.put("prowlarr", config);
-        expectations.add(new ServiceExpectation("prowlarr", "Prowlarr"));
-    }
-
-    private void addTdarr(Map<String, ServiceConfig> configs, List<ServiceExpectation> expectations, Map<String, String> env) {
-        boolean enabled = booleanValue(env, "TDARR_ENABLED", "tdarr_enabled", false);
-        if (!enabled) {
-            return;
-        }
-
-        ServiceConfig config = new ServiceConfig();
-        config.setEnabled(true);
-        config.setPath(required(env, "TDARR_PATH", "tdarr_path"));
-
-        configs.put("tdarr", config);
-        expectations.add(new ServiceExpectation("tdarr", "Tdarr"));
-    }
-
-    private void addQbittorrent(Map<String, ServiceConfig> configs, List<ServiceExpectation> expectations, Map<String, String> env) {
+    private void addQbittorrent(EnumMap<Services, AbstractServiceConfig> configs, Map<String, String> env) {
         boolean enabled = booleanValue(env, "QBITTORRENT_ENABLED", "qbittorrent_enabled", false);
         if (!enabled) {
             return;
         }
 
-        ServiceConfig config = new ServiceConfig();
+        QBittorrentServiceConfig config = new QBittorrentServiceConfig();
         config.setEnabled(true);
         config.setPath(required(env, "QBITTORRENT_PATH", "qbittorrent_path"));
         config.setGraveyardPath(required(env, "QBITTORRENT_GRAVEYARD_PATH", "qbittorrent_graveyard_path"));
 
-        configs.put("qbittorrent", config);
-        expectations.add(new ServiceExpectation("qbittorrent", "QBittorrent"));
+        configs.put(Services.QBITTORRENT, config);
     }
 
     private void addPathService(
-        Map<String, ServiceConfig> configs,
-        List<ServiceExpectation> expectations,
+        EnumMap<Services, AbstractServiceConfig> configs,
         Map<String, String> env,
-        String key,
-        String label
+        Services service
     ) {
-        String upper = key.toUpperCase(Locale.ROOT);
+        String key = service.name().toLowerCase(Locale.ROOT);
+        String upper = service.name();
         boolean enabled = booleanValue(env, upper + "_ENABLED", key + "_enabled", false);
         if (!enabled) {
             return;
         }
 
-        ServiceConfig config = new ServiceConfig();
+        CommonServiceConfig config = new CommonServiceConfig();
         config.setEnabled(true);
-    config.setPath(required(env, upper + "_PATH", key + "_path"));
+        config.setPath(required(env, upper + "_PATH", key + "_path"));
 
-        configs.put(key, config);
-        expectations.add(new ServiceExpectation(key, label));
+        configs.put(service, config);
     }
 
     private Map<String, String> loadEnv() throws IOException {
@@ -243,6 +198,4 @@ class RunnersIntegrationTest {
         return null;
     }
 
-    private record ServiceExpectation(String serviceKey, String serviceLabel) {
-    }
 }

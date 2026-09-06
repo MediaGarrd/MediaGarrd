@@ -14,7 +14,7 @@ public class MediaGarrdProperties {
     private Duration backupInterval = Duration.ofHours(12);
     private String backupRoot = "./data/server/backups";
     private int retentionCount = 10;
-    private EnumMap<Services, AbstractServiceConfig> services = new EnumMap<>(Services.class);
+    private ServicesProperties services = new ServicesProperties();
 
     public Duration getBackupInterval() {
         return backupInterval;
@@ -40,11 +40,17 @@ public class MediaGarrdProperties {
         this.retentionCount = retentionCount;
     }
 
-    public EnumMap<Services, AbstractServiceConfig> getServices() {
+    public ServicesProperties getServices() {
         return services;
     }
 
-    public void setServices(EnumMap<Services, AbstractServiceConfig> services) {
+    public void setServices(ServicesProperties services) {
         this.services = services;
     }
+
+    public EnumMap<Services, AbstractServiceConfig> getServiceConfigs() {
+        return services.toRuntimeConfigs();
+    }
+
+
 }

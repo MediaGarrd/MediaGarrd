@@ -82,7 +82,7 @@ public class BackupOrchestratorService {
 
         Path runDirectory = archiveService.createRunDirectory();
         Instant startedAt = Instant.now();
-        List<Runner> runners = runnerFactory.build(properties.getServices());
+        List<Runner> runners = runnerFactory.build(properties.getServiceConfigs());
         List<String> servicesCompleted = new ArrayList<>();
 
         LOGGER.info("Backup run started: runDir={}, services={}", runDirectory, runners.stream().map(Runner::getServiceName).toList());
