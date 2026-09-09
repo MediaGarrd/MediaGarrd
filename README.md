@@ -2,21 +2,12 @@
 
 MediaGarrd creates scheduled backups for commonly self-hosted services and provides a simple client UI to manage backups.
 
-See all supported services [here](./ref/SUPPORTED_SERVICES)
+See all supported services [here](https://github.com/MediaGarrd/Server/blob/main/ref/SUPPORTED_SERVICES)
 
-## Install
+## Structure
+MediaGarrd is split into two containers: Server and Client:
+- The server can be found [here](https://github.com/MediaGarrd/Server). It handles generating the backups at the configured interval
+- The client can be found [here](https://github.com/MediaGarrd/Client). It handles downloading the latest backups at the configured interval
 
-```bash
-chmod +x ./docker-setup.sh
-./docker-setup.sh
-```
-
-Run the setup script on each machine and choose either server or client.
-
-## Start
-
-```bash
-docker compose up --build -d
-```
-
-Open the client UI at `http://localhost:8081` (or the client port you selected during setup).
+## Contributing
+For a detailed guide on how to contribute, see [here](./CONTRIBUTING.md)
