@@ -1,9 +1,0 @@
-package wellatleastitried.mediagarrdclient.dto;
-
-public record PickupStartDto(
-    String taskId,
-    String backupId,
-    String fileName,
-    long totalBytes
-) {
-}
