@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediaGarrd</title>
+  <meta name="description" content="Scheduled, self-hosted backups for the services you run in Docker, with a client that pulls every archive off the host.">
+  <link rel="icon" href="assets/mediagarrd_logo.png">
+  <link rel="stylesheet" href="css/mediagarrd.css">
+  <link rel="stylesheet" href="css/site.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand brand-link" href="#top">
+      <img class="brand-logo" src="assets/mediagarrd_logo.png" alt="">
+      <span class="brand">
+        <span class="brand-title">MediaGarrd</span>
+        <span class="brand-sub">Self-hosted backups</span>
+      </span>
+    </a>
+    <nav class="view-toggle site-nav" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#demo">Demo</a>
+      <a href="#archives">Archives</a>
+      <a href="#install">Install</a>
+    </nav>
+    <a class="conn-badge ok" href="https://github.com/MediaGarrd">
+      <span class="dot"></span>
+      <span>GitHub</span>
+    </a>
+  </header>
+
+  <div class="page" id="top">
+    <section class="panel hero">
+      <div class="hero-copy">
+        <p class="section-label">Open source &middot; GPLv3</p>
+        <h1>Scheduled backups for everything you self-host.</h1>
+        <p class="lead">
+          MediaGarrd zips the configuration of the services on your Docker host on a schedule, keeps the newest archives,
+          and has a client on another machine pull every new archive off the host. Any service can be backed up:
+          you give it a name and the host paths that matter.
+        </p>
+        <div class="button-row hero-actions">
+          <a class="button" href="#demo">Try the demo</a>
+          <a class="button ghost" href="#install">Install</a>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-row"><span class="stat-key">Backs up</span><span class="stat-val">Any file or folder on the host</span></div>
+        <div class="stat-row"><span class="stat-key">Runs as</span><span class="stat-val">Two Docker containers</span></div>
+        <div class="stat-row"><span class="stat-key">Archive</span><span class="stat-val">One .zip per run, mirroring <code>/</code></span></div>
+        <div class="stat-row"><span class="stat-key">Restore</span><span class="stat-val"><code>bsdtar -xpf &lt;archive&gt; -C /</code></span></div>
+        <div class="stat-row"><span class="stat-key">Set up from</span><span class="stat-val">A web page, no config files</span></div>
+      </div>
+    </section>
+
+    <h2 class="section-title" id="how">How it works</h2>
+    <section class="panel flow" aria-label="Backup flow">
+      <div class="flow-step">
+        <span class="flow-index">1</span>
+        <span class="flow-title">Host paths</span>
+        <span class="flow-text td-mono">/srv/radarr/config<br>/etc/nginx/sites-available</span>
+      </div>
+      <div class="flow-arrow" aria-hidden="true"></div>
+      <div class="flow-step">
+        <span class="flow-index">2</span>
+        <span class="flow-title">Server</span>
+        <span class="flow-text">Mounts each service's paths read-only into a helper container and streams them into a zip.</span>
+      </div>
+      <div class="flow-arrow" aria-hidden="true"></div>
+      <div class="flow-step">
+        <span class="flow-index">3</span>
+        <span class="flow-title">Archive</span>
+        <span class="flow-text">One archive per run. Only the newest are kept (10 by default).</span>
+      </div>
+      <div class="flow-arrow" aria-hidden="true"></div>
+      <div class="flow-step">
+        <span class="flow-index">4</span>
+        <span class="flow-title">Client</span>
+        <span class="flow-text">Downloads the latest archive on its own schedule, on a different machine.</span>
+      </div>
+    </section>
+
+    <div class="grid-3">
+      <section class="panel">
+        <div class="panel-header"><span class="panel-title">Server</span><a class="small-link" href="https://github.com/MediaGarrd/Server">Repo &rarr;</a></div>
+        <div class="panel-body prose">
+          <p>Runs next to the services it backs up and talks to Docker through <code>/var/run/docker.sock</code>.</p>
+          <ul>
+            <li>Backs up every service on an interval (12 hours by default) and keeps the newest archives.</li>
+            <li>Never starts the helper containers. It only creates them, with the paths mounted read-only, and reads the files out through the Docker API.</li>
+            <li>Stores settings and services in a database on a mounted volume, so they survive rebuilds.</li>
+            <li>Is set up once from <code>/config</code>, unlocked with a PIN from its logs.</li>
+          </ul>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><span class="panel-title">Client</span><a class="small-link" href="https://github.com/MediaGarrd/Client">Repo &rarr;</a></div>
+        <div class="panel-body prose">
+          <p>Runs anywhere else on your network. A backup on the same disk as the data doesn't protect much.</p>
+          <ul>
+            <li>Finds servers with a quick LAN scan, by IP, or from <code>MEDIAGARRD_SERVER_IP</code>.</li>
+            <li>Downloads the latest archive on an interval (12 hours by default). These copies get an <code>-AD</code> suffix.</li>
+            <li>Starts a backup, downloads any archive, and shows the server's status.</li>
+            <li>Changes the server's settings and services after setup.</li>
+          </ul>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><span class="panel-title">What it backs up</span></div>
+        <div class="panel-body prose">
+          <p>Anything you can point at. A service is just a name and a list of absolute host paths:</p>
+          <ul>
+            <li>A directory includes everything inside it.</li>
+            <li>A file includes only that file.</li>
+            <li>Permissions, owners, modification times and symbolic links are kept.</li>
+            <li>If one path fails, none of it is included and the run is reported as partial, so you never get half a folder.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <h2 class="section-title" id="demo">Demo</h2>
+    <p class="section-intro">
+      These are the real Server and Client pages, running in your browser against a simulated server. Nothing leaves this page.
+      Start with the server's first-time setup, then manage it from the client.
+    </p>
+
+    <div class="demo-tabs view-toggle" role="tablist" aria-label="Demo">
+      <button type="button" role="tab" data-demo-tab="setup" aria-pressed="true">1. Server Setup</button>
+      <button type="button" role="tab" data-demo-tab="client" aria-pressed="false">2. Client</button>
+    </div>
+
+    <div class="demo-layout">
+      <div class="demo-window">
+        <div class="window-chrome"><span></span><span></span><span></span><code data-window-url>http://192.168.1.20:38471/config</code></div>
+
+        <div class="demo-screen" data-demo="setup" id="setupDemo">
+          <header class="topbar">
+            <div class="brand">
+              <span class="brand-title">MediaGarrd</span>
+              <span class="brand-sub">Server Configuration</span>
+            </div>
+          </header>
+
+          <div class="demo-body">
+            <section class="panel pin-panel" data-pin>
+              <div class="panel-header"><span class="panel-title">Setup PIN</span></div>
+              <form class="panel-body">
+                <div class="field-group">
+                  <label class="field-label" for="pin">Enter the PIN printed in the server logs</label>
+                  <input id="pin" name="pin" inputmode="numeric" autocomplete="off" pattern="[0-9]{6}" maxlength="6" title="The 6-digit PIN from the server logs" required>
+                  <p class="note error-text" data-error></p>
+                </div>
+                <button type="submit">Unlock</button>
+              </form>
+            </section>
+
+            <div data-setup-workspace hidden>
+              <div class="banner" data-banner role="status"></div>
+              <section class="panel" data-finished hidden>
+                <div class="panel-body">
+                  <p class="note">This is where the server's web page stops. From here on you manage it from the client, on another machine.</p>
+                  <div class="button-row"><button type="button" data-open-client>Continue to the Client</button></div>
+                </div>
+              </section>
+              <div class="workspace" data-setup-content>
+                <div class="stack">
+                  <section class="panel" data-settings></section>
+                  <section class="panel" data-finish>
+                    <div class="panel-header"><span class="panel-title">Finish Setup</span></div>
+                    <div class="panel-body">
+                      <p class="note">Once finished, this page is disabled. Later changes go through the API or the MediaGarrd Client.</p>
+                      <div class="button-row"><button type="button">Finish Setup</button></div>
+                    </div>
+                  </section>
+                </div>
+                <section class="panel" data-services></section>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-screen" data-demo="client" id="clientDemo" hidden>
+          <header class="topbar">
+            <div class="brand">
+              <span class="brand-title">MediaGarrd</span>
+              <span class="brand-sub">Client Dashboard</span>
+            </div>
+            <nav class="view-toggle" aria-label="View">
+              <button type="button" data-view-link="dashboard" aria-pressed="true">Dashboard</button>
+              <button type="button" data-view-link="config" aria-pressed="false">Server Config</button>
+            </nav>
+            <div class="conn-badge" data-badge>
+              <span class="dot"></span>
+              <span data-label>Not Connected</span>
+            </div>
+          </header>
+
+          <div class="demo-body">
+            <div class="banner" data-banner role="status"></div>
+
+            <div class="workspace" data-view="dashboard">
+              <section class="panel" data-connection>
+                <div class="panel-header"><span class="panel-title">Server Connection</span></div>
+                <form class="panel-body" data-ip-form>
+                  <div class="section-label">Connect by IP</div>
+                  <div class="field-group">
+                    <div class="input-row-2">
+                      <input name="ip" type="text" placeholder="192.168.1.20" aria-label="Server IP" required>
+                      <input name="port" type="number" min="1" max="65535" placeholder="Port" aria-label="Server port">
+                    </div>
+                  </div>
+                  <button type="submit" class="full">Connect to IP</button>
+                </form>
+                <div class="panel-body">
+                  <div class="section-label">Known Servers</div>
+                  <div class="field-group">
+                    <select aria-label="Known servers" data-known></select>
+                  </div>
+                  <button type="button" class="full ghost" data-connect-known>Connect to Selected</button>
+                </div>
+                <div class="panel-body">
+                  <div class="section-label">Network Discovery</div>
+                  <button type="button" class="full ghost" data-discover>Scan Local Network</button>
+                  <div class="scan-bar" aria-hidden="true" data-scan-bar><span></span></div>
+                  <p class="note" data-scan-note>Last scan: not run yet.</p>
+                </div>
+              </section>
+
+              <section class="panel" data-status>
+                <div class="panel-header"><span class="panel-title">Server Status</span></div>
+                <div class="panel-body">
+                  <p class="empty-state" data-no-server>No server connected.</p>
+                  <div data-details hidden>
+                    <div class="server-url" data-url></div>
+                    <div class="stat-row"><span class="stat-key">Backup Interval</span><span class="stat-val" data-interval>—</span></div>
+                    <div class="stat-row"><span class="stat-key">Retention</span><span class="stat-val" data-retention>—</span></div>
+                    <div class="stat-row"><span class="stat-key">State</span><span class="stat-val"><span class="tag" data-state>Idle</span></span></div>
+                  </div>
+                </div>
+                <div class="panel-body">
+                  <div class="section-label">Actions</div>
+                  <div class="button-row">
+                    <button type="button" class="action-btn" data-run>
+                      <span class="btn-label">Run Backup Now</span>
+                      <span class="btn-progress indeterminate" aria-hidden="true"></span>
+                    </button>
+                    <button type="button" class="ghost action-btn" data-pickup>
+                      <span class="btn-label">Download Latest</span>
+                      <span class="btn-progress" aria-hidden="true"><span class="btn-progress-fill"></span></span>
+                    </button>
+                  </div>
+                </div>
+                <form class="panel-body" data-pickup-form>
+                  <div class="section-label">Client Pickup Interval</div>
+                  <div class="field-group">
+                    <label class="field-label" for="pickupMinutes">Minutes between automatic downloads of the latest backup</label>
+                    <input id="pickupMinutes" name="minutes" type="number" min="1" step="1" value="720" required>
+                  </div>
+                  <button type="submit" class="full ghost">Save Pickup Interval</button>
+                </form>
+              </section>
+
+              <section class="panel wide" data-backups>
+                <div class="panel-header">
+                  <span class="panel-title">Backup Archives</span>
+                  <button type="button" class="ghost small" data-refresh>Refresh</button>
+                </div>
+                <div class="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th class="sortable" data-sort-key="fileName">File <span class="sort-indicator"></span></th>
+                        <th class="sortable" data-sort-key="sizeBytes">Size <span class="sort-indicator"></span></th>
+                        <th class="sortable" data-sort-key="createdAt">Created <span class="sort-indicator"></span></th>
+                        <th class="actions-cell">Get</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <p class="empty-state" data-empty>No backups loaded. Connect to a server to view archives.</p>
+              </section>
+            </div>
+
+            <div data-view="config" hidden>
+              <section class="panel" data-unavailable hidden>
+                <p class="empty-state" data-reason></p>
+              </section>
+              <div class="workspace" data-config-content hidden>
+                <section class="panel" data-settings></section>
+                <section class="panel" data-services></section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="demo-side">
+        <section class="panel">
+          <div class="panel-header"><span class="panel-title">Server Logs</span></div>
+          <pre class="terminal" data-log></pre>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><span class="panel-title">What to try</span></div>
+          <ol class="panel-body steps" data-steps="setup">
+            <li>Copy the <strong>Setup PIN</strong> from the logs above and unlock the page. Each PIN works once, and a new one is printed after 5 wrong tries.</li>
+            <li>Change the backup settings, or keep the defaults.</li>
+            <li>Add a service with one or more host paths, for example <code>radarr</code> with <code>/srv/radarr/config</code>.</li>
+            <li>Press <strong>Finish Setup</strong>. From now on the server is managed from the client.</li>
+          </ol>
+          <ol class="panel-body steps" data-steps="client" hidden>
+            <li>Press <strong>Scan Local Network</strong>, or connect to <code>192.168.1.20</code> by IP.</li>
+            <li><strong>Run Backup Now</strong> and watch a new archive appear.</li>
+            <li>Download an archive with <strong>&darr;</strong> or <strong>Download Latest</strong>.</li>
+            <li>Open <strong>Server Config</strong> to change settings or services after setup.</li>
+            <li>Skip ahead in time below to see scheduled backups and pickups.</li>
+          </ol>
+        </section>
+        <section class="panel" data-example-setup hidden>
+          <div class="panel-header"><span class="panel-title">Server Not Set Up</span></div>
+          <div class="panel-body">
+            <p class="note">The server only accepts changes from the client after its first-time setup. Finish it in step 1, or skip it:</p>
+            <div class="button-row"><button type="button" class="ghost">Use Example Setup</button></div>
+          </div>
+        </section>
+        <section class="panel" data-client-only hidden>
+          <div class="panel-header">
+            <span class="panel-title">Client Downloads</span>
+            <button type="button" class="ghost small" data-fast-forward>Skip 12 Hours</button>
+          </div>
+          <div class="panel-body">
+            <p class="note downloads-path">/var/lib/mediagarrd/downloads</p>
+            <ul class="downloads td-mono" data-downloads></ul>
+          </div>
+        </section>
+        <button type="button" class="ghost full" data-reset>Reset Demo</button>
+      </aside>
+    </div>
+
+    <template id="settingsTemplate">
+      <div class="panel-header"><span class="panel-title">Backup Settings</span></div>
+      <form class="panel-body">
+        <div class="field-group">
+          <label class="field-label">Backup location inside the server container
+            <input name="backupLocation" pattern="/.*" title="An absolute path starting with /" required>
+          </label>
+          <p class="note">Must be on a mounted volume, otherwise archives are lost when the server container is recreated.</p>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Hours between backups
+            <input name="intervalHours" type="number" min="0.25" step="0.25" required>
+          </label>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Backups to keep
+            <input name="retentionCount" type="number" min="1" step="1" required>
+          </label>
+        </div>
+        <div class="button-row"><button type="submit">Save Settings</button></div>
+      </form>
+    </template>
+
+    <template id="servicesTemplate">
+      <div class="panel-header"><span class="panel-title" data-form-title>Add Service</span></div>
+      <form class="panel-body">
+        <div class="field-group">
+          <label class="field-label">Name
+            <input name="name" placeholder="radarr" pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{0,63}" title="Up to 64 letters, digits, '.', '_' or '-', starting with a letter or digit" required>
+          </label>
+        </div>
+        <div class="field-group">
+          <span class="field-label">Host paths to back up</span>
+          <div class="field-group" data-paths></div>
+          <button type="button" class="ghost" data-add-path>+ Add Path</button>
+        </div>
+        <div class="button-row">
+          <button type="submit">Save Service</button>
+          <button type="button" class="ghost" data-cancel hidden>Cancel</button>
+        </div>
+      </form>
+      <div class="panel-header"><span class="panel-title">Configured Services</span></div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Name</th><th>Paths</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="empty-state" data-empty>No services configured yet.</p>
+    </template>
+
+    <template id="pathTemplate">
+      <div class="input-row">
+        <input name="path" placeholder="/srv/appdata/radarr/config" pattern="/.+" title="An absolute host path starting with /" aria-label="Host path" required>
+        <button type="button" class="ghost" title="Remove path">&times;</button>
+      </div>
+    </template>
+
+    <template id="serviceRowTemplate">
+      <tr>
+        <td data-name></td>
+        <td class="td-mono" data-paths></td>
+        <td class="actions-cell">
+          <button type="button" class="ghost" data-edit>Edit</button>
+          <button type="button" class="danger" data-remove>Remove</button>
+        </td>
+      </tr>
+    </template>
+
+    <template id="backupRowTemplate">
+      <tr>
+        <td class="td-mono" data-file></td>
+        <td data-size></td>
+        <td class="td-muted" data-created></td>
+        <td class="actions-cell"><button type="button" class="ghost icon-btn" title="Download this backup">↓</button></td>
+      </tr>
+    </template>
+
+    <h2 class="section-title" id="archives">Archives and restoring</h2>
+    <div class="workspace">
+      <section class="panel">
+        <div class="panel-header"><span class="panel-title">Archive Layout</span></div>
+        <div class="panel-body prose">
+          <p>Each entry sits at its absolute host path without the leading <code>/</code>, with no folder per service. Services backing up <code>/etc/nginx/sites-available/default</code> and <code>/srv/radarr/config</code> produce:</p>
+<pre class="terminal">etc/nginx/sites-available/default
+srv/radarr/config/
+srv/radarr/config/config.xml
+srv/radarr/config/radarr.db
+srv/radarr/config/logs -&gt; /var/log/radarr</pre>
+          <p>Hard links are stored as regular copies, and empty directories are kept. Named pipes, sockets and device files are skipped. If two services back up the same path, it appears once.</p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><span class="panel-title">Restoring</span></div>
+        <div class="panel-body prose">
+          <p>The archive mirrors the filesystem, so restoring is a single extraction onto <code>/</code>. <code>bsdtar</code> (the <code>libarchive-tools</code> package on Debian/Ubuntu) restores contents, permissions, owners, modification times and symbolic links:</p>
+          <div class="code-block"><pre class="terminal">sudo bsdtar -xpf 20261026-120000-000-media-backup.zip -C /</pre><button type="button" class="ghost small" data-copy>Copy</button></div>
+          <p>To look inside a backup first, extract it into an empty directory with <code>-C &lt;dir&gt;</code>.</p>
+          <div class="callout">
+            <code>unzip -o &lt;archive&gt;.zip -d /</code> also works, but most distributions ship UnZip 6.00, which doesn't restore owners. Python's <code>zipfile</code> and most GUI archive managers restore only file contents.
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <h2 class="section-title" id="install">Install</h2>
+    <p class="section-intro">Both parts need Docker with Compose v2. The defaults in each compose file work as-is.</p>
+    <div class="workspace even">
+      <section class="panel">
+        <div class="panel-header"><span class="panel-title">1. Server, on the Docker host</span><a class="small-link" href="https://github.com/MediaGarrd/Server#readme">README &rarr;</a></div>
+        <div class="panel-body prose">
+          <div class="code-block"><pre class="terminal">git clone --depth 1 https://github.com/MediaGarrd/Server.git
+cd Server
+cp docker-compose.example.yml docker-compose.yml
+docker compose up --build -d</pre><button type="button" class="ghost small" data-copy>Copy</button></div>
+          <p>Get the setup PIN from the logs:</p>
+          <div class="code-block"><pre class="terminal">docker logs mediagarrd-server 2>&amp;1 | grep "Setup PIN"</pre><button type="button" class="ghost small" data-copy>Copy</button></div>
+          <p>Then open <code>http://&lt;server-ip&gt;:38471/config</code>, enter the PIN, add your services and press <strong>Finish Setup</strong>.</p>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header"><span class="panel-title">2. Client, on another machine</span><a class="small-link" href="https://github.com/MediaGarrd/Client#readme">README &rarr;</a></div>
+        <div class="panel-body prose">
+          <div class="code-block"><pre class="terminal">git clone --depth 1 https://github.com/MediaGarrd/Client.git
+cd Client
+cp docker-compose.example.yml docker-compose.yml
+docker compose up --build -d</pre><button type="button" class="ghost small" data-copy>Copy</button></div>
+          <p>Open <code>http://&lt;client-ip&gt;:8081</code> and connect to the server by IP. To connect without opening the page, add <code>MEDIAGARRD_SERVER_IP=&lt;server-ip&gt;</code> to the client's <code>environment</code>.</p>
+          <p>A scan only sees servers on the client's own Docker network unless you add <code>network_mode: host</code>.</p>
+        </div>
+      </section>
+      <section class="panel wide">
+        <div class="panel-header"><span class="panel-title">Defaults</span></div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Setting</th><th>Where</th><th>Default</th></tr></thead>
+            <tbody>
+              <tr><td>Server port</td><td class="td-mono">SERVER_PORT + ports</td><td class="td-mono">38471</td></tr>
+              <tr><td>Time between backups</td><td>Setup page, then the client</td><td class="td-mono">PT12H</td></tr>
+              <tr><td>Backups to keep</td><td>Setup page, then the client</td><td class="td-mono">10</td></tr>
+              <tr><td>Archives on the server host</td><td>Server volume</td><td class="td-mono">./data/server/backups</td></tr>
+              <tr><td>Client port</td><td class="td-mono">CLIENT_PORT + ports</td><td class="td-mono">8081</td></tr>
+              <tr><td>Time between client downloads</td><td>Client dashboard</td><td class="td-mono">PT12H</td></tr>
+              <tr><td>Downloads on the client host</td><td>Client volume</td><td class="td-mono">./data/client/downloads</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="banner visible security">
+      <strong>Security:</strong> the server needs <code>/var/run/docker.sock</code>, which gives it root-equivalent access to the host.
+      After setup its API is unauthenticated, so don't expose the server port to untrusted networks.
+      Client authentication is <a href="https://github.com/MediaGarrd/Client/issues/8">planned</a>.
+    </div>
+
+    <footer class="site-footer">
+      <span>MediaGarrd is free software under the <a href="https://github.com/MediaGarrd/MediaGarrd/blob/main/LICENSE">GPLv3</a>.</span>
+      <span>
+        <a href="https://github.com/MediaGarrd/Server">Server</a> &middot;
+        <a href="https://github.com/MediaGarrd/Client">Client</a> &middot;
+        <a href="https://github.com/MediaGarrd/Server/issues">Report an issue</a>
+      </span>
+    </footer>
+  </div>
+</body>
+</html>
