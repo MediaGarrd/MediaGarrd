@@ -151,6 +151,7 @@ a.conn-badge { text-decoration: none; }
 .demo-body { padding: 1rem; min-height: 520px; }
 .demo-body .workspace { grid-template-columns: minmax(0, 320px) minmax(0, 1fr); }
 .pin-panel { max-width: 360px; margin: 3rem auto; }
+.finished-text { font-size: 0.9rem; color: var(--accent-dim); margin-bottom: 1rem; }
 .error-text { color: #fca5a5; }
 .field-label > input { margin-top: 0.4rem; }
 .table-scroll { overflow-x: auto; }
