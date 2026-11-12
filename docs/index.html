@@ -102,7 +102,8 @@
           <ul>
             <li>Finds servers with a quick LAN scan, by IP, or from <code>MEDIAGARRD_SERVER_IP</code>.</li>
             <li>Downloads the latest archive on an interval (12 hours by default). These copies get an <code>-AD</code> suffix.</li>
-            <li>Starts a backup, downloads any archive, and shows the server's status.</li>
+            <li>Starts a backup, downloads any archive, and shows the server's status live: the state flips between Running and Idle as soon as a run starts or finishes, and the archive list refreshes on its own.</li>
+            <li>Shows when the server or the client is unreachable, and when a newer release is available.</li>
             <li>Changes the server's settings and services after setup.</li>
           </ul>
         </div>
@@ -124,7 +125,7 @@
     <h2 class="section-title" id="demo">Demo</h2>
     <p class="section-intro">
       These are the real Server and Client pages, running in your browser against a simulated server. Nothing leaves this page.
-      Start with the server's first-time setup, then manage it from the client.
+      Start with the server's first-time setup, then manage it from the client. The client dashboard updates live, with no refreshing.
     </p>
 
     <div class="demo-tabs view-toggle" role="tablist" aria-label="Demo">
@@ -317,6 +318,7 @@
             <li>Download an archive with <strong>&darr;</strong> or <strong>Download Latest</strong>.</li>
             <li>Open <strong>Server Config</strong> to change settings or services after setup.</li>
             <li>Skip ahead in time below to see scheduled backups and pickups.</li>
+            <li>Press <strong>Take server offline</strong> to see the connection drop.</li>
           </ol>
         </section>
         <section class="panel" data-example-setup hidden>
@@ -334,6 +336,15 @@
           <div class="panel-body">
             <p class="note downloads-path">/var/lib/mediagarrd/downloads</p>
             <ul class="downloads td-mono" data-downloads></ul>
+          </div>
+        </section>
+        <section class="panel" data-client-only hidden>
+          <div class="panel-header"><span class="panel-title">Simulate</span></div>
+          <div class="panel-body">
+            <p class="note">Cut the connection to see how the dashboard reacts.</p>
+            <div class="button-row">
+              <button type="button" class="ghost" data-simulate-offline>Take server offline</button>
+            </div>
           </div>
         </section>
         <button type="button" class="ghost full" data-reset>Reset Demo</button>
@@ -430,6 +441,7 @@ srv/radarr/config/config.xml
 srv/radarr/config/radarr.db
 srv/radarr/config/logs -&gt; /var/log/radarr</pre>
           <p>Hard links are stored as regular copies, and empty directories are kept. Named pipes, sockets and device files are skipped. If two services back up the same path, it appears once.</p>
+          <p>The client's archive list updates by itself when a run finishes or retention deletes an old archive.</p>
         </div>
       </section>
       <section class="panel">
@@ -469,6 +481,8 @@ cp docker-compose.example.yml docker-compose.yml
 docker compose up --build -d</pre><button type="button" class="ghost small" data-copy>Copy</button></div>
           <p>Open <code>http://&lt;client-ip&gt;:8081</code> and connect to the server by IP. To connect without opening the page, add <code>MEDIAGARRD_SERVER_IP=&lt;server-ip&gt;</code> to the client's <code>environment</code>.</p>
           <p>A scan only sees servers on the client's own Docker network unless you add <code>network_mode: host</code>.</p>
+          <p>The dashboard follows the server live, so there is nothing to reload. If the server stops responding, the connection badge turns to <strong>Unreachable</strong> and recovers by itself.</p>
+          <p>Once a day it checks GitHub for newer <code>vX.Y.Z</code> releases of the server and the client. The <strong>Versions</strong> panel at the bottom of the dashboard shows <strong>Up-to-date</strong>, or <strong>Update available</strong> with a link to the release page.</p>
         </div>
       </section>
       <section class="panel wide">

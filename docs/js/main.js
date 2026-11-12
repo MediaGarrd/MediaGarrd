@@ -9,7 +9,8 @@ const tabs = document.querySelectorAll('[data-demo-tab]');
 const screens = document.querySelectorAll('[data-demo]');
 const windowUrl = document.querySelector('[data-window-url]');
 const logView = document.querySelector('[data-log]');
-const clientOnly = document.querySelector('[data-client-only]');
+const clientOnly = document.querySelectorAll('[data-client-only]');
+const simulateOffline = document.querySelector('[data-simulate-offline]');
 const exampleSetup = document.querySelector('[data-example-setup]');
 let current = 'setup';
 
@@ -31,7 +32,8 @@ function renderUrl() {
 
 function renderAside() {
   document.querySelectorAll('[data-steps]').forEach((steps) => { steps.hidden = steps.dataset.steps !== current; });
-  clientOnly.hidden = current !== 'client';
+  clientOnly.forEach((panel) => { panel.hidden = current !== 'client'; });
+  simulateOffline.textContent = server.online ? 'Take server offline' : 'Bring server online';
   exampleSetup.hidden = current !== 'client' || server.setupDone;
 }
 
@@ -52,6 +54,11 @@ exampleSetup.querySelector('button').addEventListener('click', async () => {
   await server.exampleSetup();
   renderAside();
   client.shown();
+});
+
+simulateOffline.addEventListener('click', () => {
+  server.setOnline(!server.online);
+  renderAside();
 });
 
 document.querySelector('[data-fast-forward]').addEventListener('click', () => client.skip(12));

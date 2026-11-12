@@ -24,10 +24,12 @@ function stamp(time) {
 export function createServer(onChange) {
   let state;
   let listeners = [];
+  let eventListeners = [];
 
   function reset() {
     state = {
       offset: 0,
+      online: true,
       pin: newPin(),
       failedAttempts: 0,
       unlocked: false,
@@ -44,6 +46,11 @@ export function createServer(onChange) {
   }
 
   const now = () => Date.now() + state.offset;
+
+  function emit(name) {
+    eventListeners.forEach((listener) => listener(name));
+  }
+
 
   function log(level, message) {
     state.log.push(`${clockTime(now())} ${level.padEnd(5)} ${message}`);
@@ -85,8 +92,13 @@ export function createServer(onChange) {
     return state.backups.find((backup) => backup.id === id) ?? fail(`Backup not found: ${id}`);
   }
 
+  function requireOnline() {
+    if (!state.online) fail('Server unreachable');
+  }
+
   async function call(work, delay = 220) {
     await sleep(delay);
+    requireOnline();
     const result = work();
     onChange?.();
     return structuredClone(result);
@@ -99,8 +111,15 @@ export function createServer(onChange) {
     now,
     get log() { return state.log; },
     get setupDone() { return state.setupDone; },
+    get online() { return state.online; },
     get unlocked() { return state.unlocked; },
     onLog(listener) { listeners.push(listener); },
+    onEvent(listener) { eventListeners.push(listener); },
+
+    setOnline(value) {
+      state.online = value;
+      emit('online');
+    },
 
     unlock: (pin) => call(() => {
       if (state.setupDone) fail('Setup is already finished');
@@ -198,20 +217,23 @@ export function createServer(onChange) {
     backups: () => call(() => state.backups),
 
     async runBackup() {
-      await sleep(150);
+      requireOnline();
       if (!state.setupDone) fail('The server has not finished its first-time setup');
       if (state.running) fail('A backup is already running');
       if (!state.services.length) fail('No services configured');
       state.running = true;
       log('INFO', `Backup run started: services=[${state.services.map((service) => service.name).join(', ')}]`);
       onChange?.();
+      emit('run-started');
       await sleep(RUN_DURATION_MS);
       createArchive('Manual');
       state.running = false;
       onChange?.();
+      emit('run-finished');
     },
 
     async download(id, onProgress) {
+      requireOnline();
       const backup = structuredClone(requireBackup(id));
       const start = performance.now();
       for (;;) {
@@ -230,6 +252,7 @@ export function createServer(onChange) {
         state.offset += hours * 3600e3;
         log('INFO', `No scheduled backups: ${state.setupDone ? 'no services configured' : 'setup is not finished'}`);
         onChange?.();
+        emit('backups-changed');
         return;
       }
       const runs = Math.floor((hours * 3600e3) / interval);
@@ -242,6 +265,7 @@ export function createServer(onChange) {
       }
       state.offset += end - now();
       onChange?.();
+      emit('backups-changed');
     },
   };
 }
