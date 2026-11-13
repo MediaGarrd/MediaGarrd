@@ -2,7 +2,7 @@ import { createNotifier, initServices, initSettings } from './forms.js';
 import { bytes, formatInterval, percent, relativeTime } from './format.js';
 import { SERVER_HOST, SERVER_PORT, SERVER_URL } from './server.js';
 
-const HEALTH_INTERVAL_MS = 1000;
+const CONNECT_MS = 700;
 const AUTO_DOWNLOAD_SUFFIX = '-AD';
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 const autoName = (fileName) => fileName.replace(/\.zip$/, `${AUTO_DOWNLOAD_SUFFIX}.zip`);
@@ -39,6 +39,8 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   let busy = false;
   let runInFlight = false;
   let serverRunning = false;
+  let link = 'LIVE';
+  let health = null;
   let latestTask = null;
   let view = 'dashboard';
 
@@ -55,6 +57,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
 
   async function requireServer() {
     if (!client.activeServer) throw new Error('No active MediaGarrd server selected');
+    if (link === 'DOWN') throw new Error(`${client.activeServer} is not responding`);
   }
 
   function setBadge(kind, label) {
@@ -62,25 +65,69 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     badge.querySelector('[data-label]').textContent = label;
   }
 
-  async function refreshHealth() {
+  function renderStatus() {
     const connected = Boolean(client.activeServer);
-    details.hidden = !connected;
-    noServer.hidden = connected;
-    if (!connected) {
-      if (!busy) setBadge('', 'Not Connected');
+    const live = connected && link === 'LIVE';
+    details.hidden = !live;
+    noServer.hidden = live;
+    if (!live) {
+      noServer.textContent = !connected ? 'No server connected.'
+        : link === 'CONNECTING' ? `Connecting to ${client.activeServer}…`
+          : `${client.activeServer} is not responding.`;
+    }
+    if (live && health) {
+      status.querySelector('[data-url]').textContent = client.activeServer;
+      status.querySelector('[data-interval]').textContent = formatInterval(health.backupInterval);
+      status.querySelector('[data-retention]').textContent = `${health.backupRetentionCount} archives`;
+    }
+    stateTag.textContent = serverRunning ? 'Running' : 'Idle';
+    stateTag.classList.toggle('running', serverRunning);
+    if (!busy) {
+      if (!connected) setBadge('', 'Not Connected');
+      else if (link === 'CONNECTING') setBadge('checking', 'Connecting…');
+      else if (link === 'DOWN') setBadge('down', 'Unreachable');
+      else setBadge('ok', client.activeServer.replace(/^https?:\/\//, ''));
+    }
+    renderActions();
+  }
+
+  async function refreshHealth() {
+    if (client.activeServer && link === 'LIVE') {
+      try {
+        health = await server.health();
+        const finished = serverRunning && !health.running;
+        serverRunning = health.running;
+        if (finished) refreshBackups();
+      } catch {
+        health = null;
+      }
+    }
+    renderStatus();
+  }
+
+  function onServerEvent(name) {
+    if (!client.activeServer) return;
+    if (busy || link === 'CONNECTING') return;
+    if (name === 'online') {
+      link = server.online ? 'LIVE' : 'DOWN';
+      renderStatus();
+      if (link === 'LIVE') {
+        refreshHealth();
+        refreshBackups();
+      }
       return;
     }
-    const health = await server.health();
-    status.querySelector('[data-url]').textContent = client.activeServer;
-    status.querySelector('[data-interval]').textContent = formatInterval(health.backupInterval);
-    status.querySelector('[data-retention]').textContent = `${health.backupRetentionCount} archives`;
-    stateTag.textContent = health.running ? 'Running' : 'Idle';
-    stateTag.classList.toggle('running', health.running);
-    if (!busy) setBadge('ok', client.activeServer.replace(/^https?:\/\//, ''));
-    const finished = serverRunning && !health.running;
-    serverRunning = health.running;
-    renderActions();
-    if (finished) refreshBackups();
+    if (link !== 'LIVE') return;
+    if (name === 'run-started') {
+      serverRunning = true;
+      renderStatus();
+    } else if (name === 'run-finished') {
+      serverRunning = false;
+      renderStatus();
+      refreshBackups();
+    } else if (name === 'backups-changed') {
+      refreshBackups();
+    }
   }
 
   function renderKnown() {
@@ -91,6 +138,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   async function connect(label, action) {
     if (busy) return null;
     notify.clear();
+    const before = client.activeServer;
     busy = true;
     setBadge('checking', label);
     scanBar.classList.add('active');
@@ -105,6 +153,15 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     scanBar.classList.remove('active');
     controls.forEach((control) => { control.disabled = false; });
     renderKnown();
+    const switched = Boolean(result) && client.activeServer !== before;
+    if (switched) {
+      link = 'CONNECTING';
+      health = null;
+      serverRunning = false;
+      renderStatus();
+      await sleep(CONNECT_MS);
+    }
+    link = client.activeServer && !server.online ? 'DOWN' : 'LIVE';
     await refreshHealth();
     if (result) serverChanged();
     return result;
@@ -118,7 +175,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   async function resolveByIp(input, portInput) {
     const [host, inlinePort] = input.trim().split(':');
     const port = portInput ? Number(portInput) : Number(inlinePort) || null;
-    if (host !== SERVER_HOST) {
+    if (host !== SERVER_HOST || !server.online) {
       await sleep(550);
       throw new Error(`No MediaGarrd server found at ${host}`);
     }
@@ -129,15 +186,15 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
 
   async function discover() {
     await sleep(2000);
-    const found = [SERVER_URL];
+    const found = server.online ? [SERVER_URL] : [];
     client.known = [...new Set([...found, ...(client.activeServer ? [client.activeServer] : [])])];
-    if (!client.activeServer) client.activeServer = found[0];
+    if (!client.activeServer && found.length) client.activeServer = found[0];
     return found;
   }
 
   function renderActions() {
     const backupBusy = serverRunning || runInFlight;
-    runButton.disabled = backupBusy;
+    runButton.disabled = backupBusy || link !== 'LIVE';
     runButton.classList.toggle('busy', backupBusy);
     runButton.querySelector('.btn-label').textContent = backupBusy ? 'Backup In Progress' : 'Run Backup Now';
     pickupButton.disabled = Boolean(latestTask);
@@ -188,6 +245,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   }
 
   async function refreshBackups() {
+    if (client.activeServer && link !== 'LIVE') return;
     try {
       await requireServer();
       backups = await server.backups();
@@ -286,7 +344,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
 
   function scheduledPickup() {
     const runs = Math.floor((12 * 60) / client.pickupMinutes);
-    if (!runs || !client.activeServer || !server.setupDone) return;
+    if (!runs || !client.activeServer || link !== 'LIVE' || !server.setupDone) return;
     server.backups().then((list) => {
       if (!list.length) return;
       const latest = list[0];
@@ -327,15 +385,12 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     renderActions();
     try {
       await requireServer();
-      const run = server.runBackup();
-      setTimeout(refreshHealth, 300);
-      await run;
-      await refreshBackups();
+      await server.runBackup();
     } catch (error) {
       notify.error(error);
     } finally {
       runInFlight = false;
-      await refreshHealth();
+      renderActions();
     }
   });
 
@@ -377,9 +432,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
 
   viewLinks.forEach((link) => link.addEventListener('click', () => showView(link.dataset.viewLink)));
 
-  setInterval(() => {
-    if (!document.hidden && !root.hidden) refreshHealth();
-  }, HEALTH_INTERVAL_MS);
+  server.onEvent(onServerEvent);
 
   function reset() {
     client = { activeServer: null, known: [], pickupMinutes: 720, downloads: [] };
@@ -387,11 +440,13 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     rowTasks.clear();
     latestTask = null;
     serverRunning = false;
+    link = 'LIVE';
+    health = null;
     ipForm.reset();
     pickupForm.elements.minutes.value = client.pickupMinutes;
     scanNote.textContent = 'Last scan: not run yet.';
     renderKnown();
-    renderActions();
+    renderStatus();
     renderDownloads();
     renderTable('No backups loaded. Connect to a server to view archives.');
     showView('dashboard');
@@ -410,8 +465,6 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     skip(hours) {
       server.skip(hours);
       scheduledPickup();
-      refreshBackups();
-      refreshHealth();
       notify.clear();
     },
   };
