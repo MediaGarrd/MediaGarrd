@@ -50,7 +50,7 @@
         <div class="stat-row"><span class="stat-key">Backs up</span><span class="stat-val">Any file or folder on the host</span></div>
         <div class="stat-row"><span class="stat-key">Runs as</span><span class="stat-val">Two Docker containers</span></div>
         <div class="stat-row"><span class="stat-key">Archive</span><span class="stat-val">One .zip per run, mirroring <code>/</code></span></div>
-        <div class="stat-row"><span class="stat-key">Restore</span><span class="stat-val"><code>bsdtar -xpPf &lt;archive&gt; -C /</code></span></div>
+        <div class="stat-row"><span class="stat-key">Restore</span><span class="stat-val"><code>sudo ./mgrecover.sh &lt;archive&gt;.zip</code></span></div>
         <div class="stat-row"><span class="stat-key">Set up from</span><span class="stat-val">A web page, no config files</span></div>
       </div>
     </section>
@@ -445,13 +445,18 @@ srv/radarr/config/logs -&gt; /var/log/radarr</pre>
         </div>
       </section>
       <section class="panel">
-        <div class="panel-header"><span class="panel-title">Restoring</span></div>
+        <div class="panel-header"><span class="panel-title">Restoring</span><a class="small-link" href="https://github.com/MediaGarrd/Recovery#readme">README &rarr;</a></div>
         <div class="panel-body prose">
-          <p>The archive mirrors the filesystem, so restoring is a single extraction onto <code>/</code>. <code>bsdtar</code> (the <code>libarchive-tools</code> package on Debian/Ubuntu) restores contents, permissions, owners, modification times and symbolic links:</p>
-          <div class="code-block"><pre class="terminal">sudo bsdtar -xpPf 20261026-120000-000-media-backup.zip -C /</pre><button type="button" class="ghost small" data-copy>Copy</button></div>
-          <p>To look inside a backup first, extract it into an empty directory with <code>-C &lt;dir&gt;</code>.</p>
+          <p>Restore archives with <a href="https://github.com/MediaGarrd/Recovery">mgrecover</a> (<a href="https://github.com/MediaGarrd/Recovery/releases/latest">latest release</a>). It puts every file back at its original path with contents, permissions, owners (as root) and modification times. Unlike plain extraction, it prints a plan and asks for confirmation first, recreates a symbolic link only if its target exists on the machine or in the archive, and refuses the whole archive, before writing anything, if a name is unsafe. It needs <code>bsdtar</code> (the <code>libarchive-tools</code> package on Debian/Ubuntu), bash 4+, coreutils, <code>awk</code> and <code>sed</code>.</p>
+          <div class="code-block"><pre class="terminal">curl -fLO https://github.com/MediaGarrd/Recovery/releases/latest/download/mgrecover.sh
+chmod +x mgrecover.sh</pre><button type="button" class="ghost small" data-copy>Copy</button></div>
+          <p>Stop the MediaGarrd server first: the archive contains its database, and restoring over a running server corrupts it. Then restore:</p>
+          <div class="code-block"><pre class="terminal">sudo ./mgrecover.sh 20261026-120000-000-media-backup.zip</pre><button type="button" class="ghost small" data-copy>Copy</button></div>
+          <p>To preview, <code>-n</code> prints the plan and writes nothing. To look inside a backup, <code>-C &lt;dir&gt;</code> restores under that directory instead of <code>/</code> and creates no symbolic links.</p>
+          <div class="code-block"><pre class="terminal">sudo ./mgrecover.sh -n 20261026-120000-000-media-backup.zip
+./mgrecover.sh -C /tmp/restore 20261026-120000-000-media-backup.zip</pre><button type="button" class="ghost small" data-copy>Copy</button></div>
           <div class="callout">
-            <code>unzip -o &lt;archive&gt;.zip -d /</code> also works, but most distributions ship UnZip 6.00, which doesn't restore owners. Python's <code>zipfile</code> and most GUI archive managers restore only file contents.
+            Without mgrecover, <code>sudo bsdtar -xpPf &lt;archive&gt;.zip -C /</code> extracts every entry exactly as stored, including links whose targets are missing, with none of these checks. <code>unzip</code> 6.00 doesn't restore owners, and Python's <code>zipfile</code> and most GUI archive managers restore only file contents.
           </div>
         </div>
       </section>
