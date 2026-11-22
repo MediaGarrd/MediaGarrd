@@ -11,7 +11,10 @@ export function createNotifier(banner) {
   return {
     ok: (message) => show(message, 'ok'),
     error: (error) => show(error.message || String(error), 'error'),
-    clear: () => { banner.className = 'banner'; },
+    clear: () => {
+      banner.textContent = '';
+      banner.className = 'banner';
+    },
   };
 }
 
@@ -30,10 +33,12 @@ export function initSettings(panel, api, notify, onSaved = () => {}) {
     event.preventDefault();
     notify.clear();
     try {
+      const hours = Number(intervalHours.value);
+      if (!(hours >= 0.25 && hours <= 8760)) throw new Error('Backup interval must be between 15 minutes and 365 days');
       show(await api.updateConfig({
         backupLocation: backupLocation.value,
         retentionCount: Number(retentionCount.value),
-        backupInterval: toDuration(Number(intervalHours.value) * 60),
+        backupInterval: toDuration(hours * 60),
       }));
       notify.ok('Backup settings saved');
       onSaved();
@@ -45,7 +50,7 @@ export function initSettings(panel, api, notify, onSaved = () => {}) {
   return { show };
 }
 
-export function initServices(panel, api, notify, onChanged = () => {}) {
+export function initServices(panel, api, notify) {
   panel.replaceChildren(fromTemplate('servicesTemplate'));
   const form = panel.querySelector('form');
   const title = panel.querySelector('[data-form-title]');
@@ -109,7 +114,6 @@ export function initServices(panel, api, notify, onChanged = () => {}) {
   function show(services) {
     rows.replaceChildren(...services.map(renderRow));
     empty.hidden = services.length > 0;
-    onChanged(services);
   }
 
   async function refresh() {

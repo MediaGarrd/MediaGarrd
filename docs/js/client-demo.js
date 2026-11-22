@@ -7,8 +7,9 @@ const AUTO_DOWNLOAD_SUFFIX = '-AD';
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 const autoName = (fileName) => fileName.replace(/\.zip$/, `${AUTO_DOWNLOAD_SUFFIX}.zip`);
 
-export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
-  const notify = createNotifier(root.querySelector('[data-banner]'));
+export function initClientDemo(root, server, { downloadsList, skipButton, onViewChanged }) {
+  const banner = createNotifier(root.querySelector('[data-banner]'));
+  const notify = { ...banner, error: (error) => { if (!error?.cancelled) banner.error(error); } };
   const badge = root.querySelector('[data-badge]');
   const connection = root.querySelector('[data-connection]');
   const ipForm = connection.querySelector('[data-ip-form]');
@@ -23,6 +24,13 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   const runButton = status.querySelector('[data-run]');
   const pickupButton = status.querySelector('[data-pickup]');
   const pickupForm = status.querySelector('[data-pickup-form]');
+  const pairing = root.querySelector('[data-pairing]');
+  const pairForm = pairing.querySelector('[data-pair-form]');
+  const pairNote = pairing.querySelector('[data-pair-note]');
+  const manage = pairing.querySelector('[data-manage]');
+  const codeBox = pairing.querySelector('[data-code-box]');
+  const codeText = pairing.querySelector('[data-code]');
+  const codeExpiry = pairing.querySelector('[data-code-expiry]');
   const backupsPanel = root.querySelector('[data-backups]');
   const rows = backupsPanel.querySelector('tbody');
   const empty = backupsPanel.querySelector('[data-empty]');
@@ -35,6 +43,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   const sort = { key: 'createdAt', dir: 'desc' };
   const rowTasks = new Map();
   let client;
+  let generation = 0;
   let backups = [];
   let busy = false;
   let runInFlight = false;
@@ -43,21 +52,53 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   let health = null;
   let latestTask = null;
   let view = 'dashboard';
+  let code = null;
+  let codeTimer = null;
 
   const configApi = {
-    config: () => requireServer().then(() => server.config(false)),
-    updateConfig: (config) => requireServer().then(() => server.updateConfig(false, config)),
-    services: () => requireServer().then(() => server.services(false)),
-    addService: (service) => requireServer().then(() => server.addService(false, service)),
-    updateService: (name, service) => requireServer().then(() => server.updateService(false, name, service)),
-    removeService: (name) => requireServer().then(() => server.removeService(false, name)),
+    config: () => requireServer().then(() => server.config(client.token)),
+    updateConfig: (config) => requireServer().then(() => server.updateConfig(client.token, config)),
+    services: () => requireServer().then(() => server.services(client.token)),
+    addService: (service) => requireServer().then(() => server.addService(client.token, service)),
+    updateService: (name, service) => requireServer().then(() => server.updateService(client.token, name, service)),
+    removeService: (name) => requireServer().then(() => server.removeService(client.token, name)),
   };
   const settings = initSettings(root.querySelector('[data-config-content] [data-settings]'), configApi, notify, refreshHealth);
   const services = initServices(root.querySelector('[data-config-content] [data-services]'), configApi, notify);
 
   async function requireServer() {
     if (!client.activeServer) throw new Error('No active MediaGarrd server selected');
-    if (link === 'DOWN') throw new Error(`${client.activeServer} is not responding`);
+    if (!client.token) throw new Error('This client is not paired with the server');
+  }
+
+  function renderCode() {
+    if (!code) {
+      codeBox.hidden = true;
+      return;
+    }
+    const left = Math.round((Date.parse(code.expiresAt) - server.now()) / 1000);
+    codeText.textContent = code.code;
+    codeExpiry.textContent = left > 0 ? `Expires in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'Expired';
+    codeBox.hidden = false;
+    if (left <= 0) {
+      clearInterval(codeTimer);
+      codeTimer = null;
+    }
+  }
+
+  function clearCode() {
+    code = null;
+    clearInterval(codeTimer);
+    codeTimer = null;
+    renderCode();
+  }
+
+  function renderPairing() {
+    const visible = Boolean(client.activeServer) && link === 'LIVE';
+    pairing.hidden = !visible;
+    pairForm.hidden = Boolean(client.token);
+    manage.hidden = !client.token;
+    pairNote.textContent = 'Enter the PIN the server prints in its logs ("Pairing PIN"), or a pairing code created by a client that is already paired.';
   }
 
   function setBadge(kind, label) {
@@ -71,32 +112,30 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     details.hidden = !live;
     noServer.hidden = live;
     if (!live) {
-      noServer.textContent = !connected ? 'No server connected.'
-        : link === 'CONNECTING' ? `Connecting to ${client.activeServer}…`
-          : `${client.activeServer} is not responding.`;
+      noServer.textContent = connected ? `Connecting to ${client.activeServer}…` : 'No server connected.';
     }
     if (live && health) {
       status.querySelector('[data-url]').textContent = client.activeServer;
       status.querySelector('[data-interval]').textContent = formatInterval(health.backupInterval);
-      status.querySelector('[data-retention]').textContent = `${health.backupRetentionCount} archives`;
+      status.querySelector('[data-retention]').textContent = health.backupRetentionCount ? `${health.backupRetentionCount} archives` : '—';
     }
     stateTag.textContent = serverRunning ? 'Running' : 'Idle';
     stateTag.classList.toggle('running', serverRunning);
     if (!busy) {
       if (!connected) setBadge('', 'Not Connected');
       else if (link === 'CONNECTING') setBadge('checking', 'Connecting…');
-      else if (link === 'DOWN') setBadge('down', 'Unreachable');
       else setBadge('ok', client.activeServer.replace(/^https?:\/\//, ''));
     }
+    renderPairing();
     renderActions();
   }
 
   async function refreshHealth() {
     if (client.activeServer && link === 'LIVE') {
       try {
-        health = await server.health();
+        health = await server.health(client.token);
         const finished = serverRunning && !health.running;
-        serverRunning = health.running;
+        serverRunning = Boolean(health.running);
         if (finished) refreshBackups();
       } catch {
         health = null;
@@ -107,17 +146,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
 
   function onServerEvent(name) {
     if (!client.activeServer) return;
-    if (busy || link === 'CONNECTING') return;
-    if (name === 'online') {
-      link = server.online ? 'LIVE' : 'DOWN';
-      renderStatus();
-      if (link === 'LIVE') {
-        refreshHealth();
-        refreshBackups();
-      }
-      return;
-    }
-    if (link !== 'LIVE') return;
+    if (busy || link !== 'LIVE') return;
     if (name === 'run-started') {
       serverRunning = true;
       renderStatus();
@@ -135,9 +164,21 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     known.replaceChildren(...(options.length ? options : [new Option('— none discovered yet —', '')]));
   }
 
+  function cancelled() {
+    const error = new Error('Demo was reset');
+    error.cancelled = true;
+    return error;
+  }
+
   async function connect(label, action) {
     if (busy) return null;
     notify.clear();
+    const started = generation;
+    const stale = () => started !== generation;
+    const pause = async (ms) => {
+      await sleep(ms);
+      if (stale()) throw cancelled();
+    };
     const before = client.activeServer;
     busy = true;
     setBadge('checking', label);
@@ -145,10 +186,11 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     controls.forEach((control) => { control.disabled = true; });
     let result = null;
     try {
-      result = await action();
+      result = await action(pause);
     } catch (error) {
       notify.error(error);
     }
+    if (stale()) return null;
     busy = false;
     scanBar.classList.remove('active');
     controls.forEach((control) => { control.disabled = false; });
@@ -160,9 +202,11 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
       serverRunning = false;
       renderStatus();
       await sleep(CONNECT_MS);
+      if (stale()) return null;
     }
-    link = client.activeServer && !server.online ? 'DOWN' : 'LIVE';
+    link = 'LIVE';
     await refreshHealth();
+    if (stale()) return null;
     if (result) serverChanged();
     return result;
   }
@@ -172,21 +216,21 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     if (!client.known.includes(url)) client.known.push(url);
   }
 
-  async function resolveByIp(input, portInput) {
-    const [host, inlinePort] = input.trim().split(':');
+  async function resolveByIp(input, portInput, pause) {
+    const [host, inlinePort] = input.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').split('/')[0].split(':');
     const port = portInput ? Number(portInput) : Number(inlinePort) || null;
-    if (host !== SERVER_HOST || !server.online) {
-      await sleep(550);
+    if (host !== SERVER_HOST) {
+      await pause(550);
       throw new Error(`No MediaGarrd server found at ${host}`);
     }
-    await sleep(port && port !== SERVER_PORT ? 1400 : 450);
+    await pause(port && port !== SERVER_PORT ? 1400 : 450);
     select(SERVER_URL);
     return SERVER_URL;
   }
 
-  async function discover() {
-    await sleep(2000);
-    const found = server.online ? [SERVER_URL] : [];
+  async function discover(pause) {
+    await pause(2000);
+    const found = [SERVER_URL];
     client.known = [...new Set([...found, ...(client.activeServer ? [client.activeServer] : [])])];
     if (!client.activeServer && found.length) client.activeServer = found[0];
     return found;
@@ -194,10 +238,11 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
 
   function renderActions() {
     const backupBusy = serverRunning || runInFlight;
-    runButton.disabled = backupBusy || link !== 'LIVE';
+    runButton.disabled = backupBusy || link !== 'LIVE' || !client.token;
+    skipButton.disabled = backupBusy;
     runButton.classList.toggle('busy', backupBusy);
     runButton.querySelector('.btn-label').textContent = backupBusy ? 'Backup In Progress' : 'Run Backup Now';
-    pickupButton.disabled = Boolean(latestTask);
+    pickupButton.disabled = Boolean(latestTask) || !client.token;
     pickupButton.classList.toggle('busy', Boolean(latestTask));
     pickupButton.querySelector('.btn-label').textContent = latestTask ? 'Downloading...' : 'Download Latest';
     pickupButton.querySelector('.btn-progress-fill').style.width = `${latestTask ? percent(latestTask.written, latestTask.total) : 0}%`;
@@ -227,6 +272,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     headers.forEach((header) => {
       const active = header.dataset.sortKey === sort.key;
       header.classList.toggle('active', active);
+      header.setAttribute('aria-sort', active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
       header.querySelector('.sort-indicator').textContent = active ? (sort.dir === 'asc' ? '▲' : '▼') : '↕';
     });
     rows.replaceChildren(...[...backups].sort(compare).map((backup) => {
@@ -246,11 +292,20 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
 
   async function refreshBackups() {
     if (client.activeServer && link !== 'LIVE') return;
+    if (client.activeServer && !client.token) {
+      backups = [];
+      renderTable('No backups loaded. Pair this client with the server to view archives.');
+      return;
+    }
+    const started = generation;
     try {
       await requireServer();
-      backups = await server.backups();
+      const list = await server.backups(client.token);
+      if (started !== generation) return;
+      backups = list;
       renderTable();
     } catch (error) {
+      if (started !== generation || error.cancelled) return;
       backups = [];
       renderTable(`${error.message}. Connect to a server to view archives.`);
     }
@@ -265,6 +320,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
 
   async function download(backup, latest) {
     if (latest ? latestTask : rowTasks.has(backup.id)) return;
+    const started = generation;
     const task = { written: 0, total: backup.sizeBytes };
     const button = () => rows.querySelector(`button[data-id="${backup.id}"]`);
     if (latest) latestTask = task;
@@ -273,16 +329,18 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     render();
     try {
       if (!client.downloads.some((file) => file.name === backup.fileName && file.size === backup.sizeBytes)) {
-        await server.download(backup.id, (written, total) => {
+        await server.download(client.token, backup.id, (written, total) => {
           task.written = written;
           task.total = total;
           render();
         });
+        if (started !== generation) return;
         save(backup, backup.fileName, false);
       }
     } catch (error) {
       notify.error(error);
     } finally {
+      if (started !== generation) return;
       if (latest) latestTask = null;
       else rowTasks.delete(backup.id);
       render();
@@ -311,18 +369,21 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   }
 
   async function loadConfig() {
+    const started = generation;
     try {
       await requireServer();
-      const [config, list] = await Promise.all([server.config(false), server.services(false)]);
+      const [config, list] = await Promise.all([server.config(client.token), server.services(client.token)]);
+      if (started !== generation) return;
       settings.show(config);
       services.show(list);
       configContent.hidden = false;
       unavailable.hidden = true;
     } catch (error) {
+      if (started !== generation || error.cancelled) return;
       configContent.hidden = true;
       unavailable.hidden = false;
       unavailable.querySelector('[data-reason]').textContent =
-        `${error.message}. Connect to a MediaGarrd server that has finished setup on the Dashboard to manage its configuration.`;
+        `${error.message}. Connect and pair with a MediaGarrd server on the Dashboard to manage its configuration.`;
     }
   }
 
@@ -342,20 +403,28 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     onViewChanged(view);
   }
 
+  function pickupDue() {
+    const interval = client.pickupMinutes * 60e3;
+    const time = server.now();
+    if (time < client.nextPickupAt) return false;
+    client.nextPickupAt += Math.floor((time - client.nextPickupAt) / interval + 1) * interval;
+    return true;
+  }
+
   function scheduledPickup() {
-    const runs = Math.floor((12 * 60) / client.pickupMinutes);
-    if (!runs || !client.activeServer || link !== 'LIVE' || !server.setupDone) return;
-    server.backups().then((list) => {
-      if (!list.length) return;
+    if (!pickupDue() || !client.activeServer || link !== 'LIVE' || !client.token) return;
+    const started = generation;
+    server.backups(client.token).then((list) => {
+      if (started !== generation || !list.length) return;
       const latest = list[0];
       const names = [latest.fileName, autoName(latest.fileName)];
       if (!client.downloads.some((file) => names.includes(file.name))) save(latest, names[1], true);
-    });
+    }).catch(() => {});
   }
 
   ipForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    connect('Probing…', () => resolveByIp(ipForm.elements.ip.value, ipForm.elements.port.value));
+    connect('Probing…', (pause) => resolveByIp(ipForm.elements.ip.value, ipForm.elements.port.value, pause));
   });
 
   connection.querySelector('[data-connect-known]').addEventListener('click', () => {
@@ -363,8 +432,8 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
       notify.error('No server selected.');
       return;
     }
-    connect('Connecting…', async () => {
-      await sleep(300);
+    connect('Connecting…', async (pause) => {
+      await pause(300);
       select(known.value);
       return known.value;
     });
@@ -373,7 +442,9 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   connection.querySelector('[data-discover]').addEventListener('click', async () => {
     if (busy) return;
     scanNote.textContent = 'Scan in progress…';
+    const started = generation;
     const found = await connect('Scanning…', discover);
+    if (started !== generation) return;
     const count = found?.length ?? 0;
     scanNote.textContent = found ? `Last scan: found ${count} server${count === 1 ? '' : 's'}.` : 'Last scan: failed.';
   });
@@ -381,16 +452,19 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   runButton.addEventListener('click', async () => {
     if (serverRunning || runInFlight) return;
     notify.clear();
+    const started = generation;
     runInFlight = true;
     renderActions();
     try {
       await requireServer();
-      await server.runBackup();
+      await server.runBackup(client.token);
     } catch (error) {
       notify.error(error);
     } finally {
-      runInFlight = false;
-      renderActions();
+      if (started === generation) {
+        runInFlight = false;
+        renderActions();
+      }
     }
   });
 
@@ -399,9 +473,90 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     notify.clear();
     try {
       await requireServer();
-      const list = await server.backups();
+      const list = await server.backups(client.token);
       if (!list.length) throw new Error('No backups found on server');
       await download(list[0], true);
+    } catch (error) {
+      notify.error(error);
+    }
+  });
+
+  const isRefusal = (error) => error.message.startsWith('Invalid or revoked token');
+
+  async function refuseWhileStillPaired() {
+    try {
+      await server.health(client.token);
+    } catch (error) {
+      if (isRefusal(error)) return;
+      throw error;
+    }
+    throw new Error('This client is already paired with this server. Unpair it first.');
+  }
+
+  pairForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    notify.clear();
+    const button = pairForm.querySelector('button');
+    button.disabled = true;
+    const started = generation;
+    try {
+      if (client.token) await refuseWhileStillPaired();
+      if (started !== generation) return;
+      const paired = await server.pair(pairForm.elements.pin.value, 'Demo Client');
+      if (started !== generation) return;
+      client.token = paired.token;
+      client.clientId = paired.id;
+      pairForm.reset();
+      try {
+        await server.health(paired.token);
+      } catch (error) {
+        if (started === generation) {
+          client.token = null;
+          client.clientId = null;
+        }
+        throw error;
+      }
+      if (started !== generation) return;
+      notify.ok('Paired with the server');
+      await refreshHealth();
+      if (started !== generation) return;
+      serverChanged();
+    } catch (error) {
+      notify.error(error);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  pairing.querySelector('[data-create-code]').addEventListener('click', async () => {
+    notify.clear();
+    const started = generation;
+    try {
+      const created = await server.createCode(client.token);
+      if (started !== generation) return;
+      code = created;
+      clearInterval(codeTimer);
+      codeTimer = setInterval(renderCode, 1000);
+      renderCode();
+    } catch (error) {
+      notify.error(error);
+    }
+  });
+
+  pairing.querySelector('[data-unpair]').addEventListener('click', async () => {
+    if (!confirm('Unpair this client from the server?')) return;
+    notify.clear();
+    const started = generation;
+    try {
+      await server.unpair(client.token, client.clientId);
+      if (started !== generation) return;
+      client.token = null;
+      client.clientId = null;
+      clearCode();
+      notify.ok('Unpaired from the server');
+      await refreshHealth();
+      if (started !== generation) return;
+      serverChanged();
     } catch (error) {
       notify.error(error);
     }
@@ -412,6 +567,7 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
     notify.clear();
     await sleep(200);
     client.pickupMinutes = Number(pickupForm.elements.minutes.value);
+    client.nextPickupAt = server.now() + client.pickupMinutes * 60e3;
     notify.ok('Pickup interval saved');
   });
 
@@ -435,7 +591,15 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
   server.onEvent(onServerEvent);
 
   function reset() {
-    client = { activeServer: null, known: [], pickupMinutes: 720, downloads: [] };
+    generation += 1;
+    busy = false;
+    runInFlight = false;
+    scanBar.classList.remove('active');
+    controls.forEach((control) => { control.disabled = false; });
+    pairForm.reset();
+    pairForm.querySelector('button').disabled = false;
+    client = { activeServer: null, known: [], pickupMinutes: 720, nextPickupAt: server.now() + 720 * 60e3, downloads: [], token: null, clientId: null };
+    clearCode();
     backups = [];
     rowTasks.clear();
     latestTask = null;
@@ -456,16 +620,16 @@ export function initClientDemo(root, server, { downloadsList, onViewChanged }) {
 
   return {
     reset,
-    get view() { return view; },
-    shown() {
-      refreshHealth();
-      if (client.activeServer) refreshBackups();
-      if (view === 'config') loadConfig();
-    },
     skip(hours) {
-      server.skip(hours);
-      scheduledPickup();
+      if (serverRunning || runInFlight) return;
       notify.clear();
+      try {
+        server.skip(hours);
+      } catch (error) {
+        notify.error(error);
+        return;
+      }
+      scheduledPickup();
     },
   };
 }
