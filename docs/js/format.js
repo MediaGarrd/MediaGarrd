@@ -1,9 +1,9 @@
-const ISO_DURATION = /^PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/i;
+const ISO_DURATION = /^P(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/i;
 
 export function seconds(duration) {
   if (typeof duration === 'number') return duration;
-  const [, hours = 0, minutes = 0, secs = 0] = ISO_DURATION.exec(duration ?? '') || [];
-  return Number(hours) * 3600 + Number(minutes) * 60 + Number(secs);
+  const [, days = 0, hours = 0, minutes = 0, secs = 0] = ISO_DURATION.exec(duration ?? '') || [];
+  return Number(days) * 86400 + Number(hours) * 3600 + Number(minutes) * 60 + Number(secs);
 }
 
 export function toDuration(minutes) {
